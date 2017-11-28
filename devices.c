@@ -29,7 +29,11 @@ void devices_init()
 }
 void enq_io(IORB *iorb) {
     enQueueSorted(&queues[iorb->dev_id],iorb,compareTo);
-    //Start io request else errors
+
+    lock_page(iorb);
+    Dev_Tbl[iorb->dev_id].iorb = iorb;
+    Dev_Tbl[iorb->dev_id].busy = true;
+    siodev(iorb);
 }
 void deq_io(IORB *iorb)
 {
@@ -59,9 +63,21 @@ void deq_io(IORB *iorb)
     }
 
 }
-void purge_iorbs(PCB *pcb;)
+void purge_iorbs(PCB *pcb)
 {
-
+    int i = 0;
+    for(i = 0; i < MAX_DEV; i++) {
+        QueueNode *node = frontNode(&queues[i]);
+        while(node != NULL) {
+            QueueNode *nextNode = node->next;
+            IORB *iorb = node->data;
+            if(node != getCurrentValue && iorb->pcb == pcb) { //node not being serviced and contains the pcb
+                removeNode(&queues[i],node);
+                notify_files(iorb);
+            }
+            node = nextNode;
+        }
+    }
 }
 int compareTo(IORB *i1, IORB *i2) {
     int trackNum1 = (i1->block_id * PAGE_SIZE)/TRACK_SIZE;
